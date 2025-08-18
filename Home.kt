@@ -1,113 +1,171 @@
 package com.example.bcbt
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.*
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
-import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
+import com.google.accompanist.swiperefresh.*
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import kotlinx.coroutines.launch
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter", "SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Home(navController: NavController) {
-    BackHandler {
-        navController.navigate(Routes.splash)
-    }
+fun Home(navController: androidx.navigation.NavController) {
+    val context = LocalContext.current
+    val webView = remember { WebView(context) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
+    // Improved Back Handling
+    BackHandler {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            navController.navigate(Routes.splash) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+  StatusBar()
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    navController.navigate(Routes.gradeSplash)
+                },
+                modifier = Modifier.padding(16.dp),
+                containerColor = GradeMateColors.Primary,
+                contentColor = Color.White,
+                elevation = FloatingActionButtonDefaults.elevation(8.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.grademate),
+                    contentDescription = "Open GradeMate",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        },
         topBar = {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp) // Typical app bar height
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF6A1B9A), // Purple
-                                Color(0xFF283593)  // Blue
-                            )
-                        )
-                    )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp) // Increased height
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF6A1B9A), Color(0xFF283593))
-                            )
-                        )
-                )
-            }
+                    .height(56.dp)
+                    .background(GradeMateColors.Primary)
+            )
         }
-    ) { innerPadding -> // Receive padding from Scaffold
-        AndroidView(
-            factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = true
-                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): Boolean {
-                            val url = request?.url.toString()
-                            return if (url.startsWith("http")) {
-                                false // Load inside WebView
-                            } else {
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
-                                    context.startActivity(intent)
-                                    true
-                                } catch (e: ActivityNotFoundException) {
-                                    Toast.makeText(
-                                        context,
-                                        "No app to handle this link",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    true
+    ) { innerPadding ->
+        SwipeRefresh(
+            state = rememberSwipeRefreshState(isRefreshing),
+            onRefresh = {
+                isRefreshing = true
+                webView.reload()
+            },
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            AndroidView(
+                factory = {
+                    webView.apply {
+                        settings.javaScriptEnabled = true
+                        settings.cacheMode = WebSettings.LOAD_NO_CACHE
+
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): Boolean {
+                                val url = request?.url.toString()
+                                return if (url.startsWith("http")) {
+                                    false
+                                } else {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                                        context.startActivity(intent)
+                                        true
+                                    } catch (e: ActivityNotFoundException) {
+                                        Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                                        true
+                                    }
+                                }
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                coroutineScope.launch {
+                                    isRefreshing = false
                                 }
                             }
                         }
+
+                        webChromeClient = WebChromeClient()
+
+                        setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                            try {
+                                val request = DownloadManager.Request(url.toUri())
+                                request.setMimeType(mimeType)
+                                request.addRequestHeader("User-Agent", userAgent)
+                                request.setDescription("Downloading file...")
+                                request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType))
+                                request.allowScanningByMediaScanner()
+                                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                request.setDestinationInExternalPublicDir(
+                                    android.os.Environment.DIRECTORY_DOWNLOADS,
+                                    URLUtil.guessFileName(url, contentDisposition, mimeType)
+                                )
+
+                                val dm = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as DownloadManager
+                                dm.enqueue(request)
+
+                                Toast.makeText(context, "Downloading...", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+
+                        if (url == null || url != "https://bcbtcollege.ac.tz/") {
+                            loadUrl("https://bcbtcollege.ac.tz/")
+                        }
                     }
-                    webChromeClient = WebChromeClient()
-                    loadUrl("https://bcbtcollege.ac.tz/")
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding) // Respect topBar padding
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+@Composable
+fun StatusBar(){
+    val systemUiController = rememberSystemUiController()
+
+    // Change status bar color
+    SideEffect {
+        systemUiController.setStatusBarColor(
+            color = GradeMateColors.Primary, // your desired color
+            darkIcons = true // true = dark icons, false = light icons
         )
     }
+}
+@Preview
+@Composable
+fun HomePreview() {
+    Home(navController = rememberNavController())
 }

@@ -49,14 +49,14 @@ fun Splash(navController: NavController) {
             popUpTo(Routes.splash) { inclusive = true }
         }
     }
-
+StatusBar()
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF6A1B9A), // Purple top
+                        GradeMateColors.Primary, // Purple top
                         Color(0xFF283593)  // Blue bottom
                     )
                 )
@@ -72,8 +72,10 @@ fun Splash(navController: NavController) {
                 painter = painterResource(R.drawable.logo), // your logo resource
                 contentDescription = null,
                 modifier = Modifier
-                    .size(150.dp)
+                    .size(130.dp)
                     .clip(CircleShape)
+                    .background(Color.White)
+                    .padding(8.dp)
                     .graphicsLayer(
                         scaleX = scale.value,
                         scaleY = scale.value,
@@ -81,7 +83,6 @@ fun Splash(navController: NavController) {
                         alpha = alpha.value
                     )
             )
-
             Spacer(modifier = Modifier.height(20.dp))
         }
 
